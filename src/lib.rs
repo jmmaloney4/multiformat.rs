@@ -6,9 +6,9 @@ mod tests {
     }
 }
 
-mod multibase {
+pub mod multibase {
     #[repr(u8)]
-    enum Encoding {
+    pub enum Encoding {
         /// "\0"
         Identity = b'\0',
         /// "0"
@@ -59,5 +59,5 @@ mod multibase {
         Proquint = b'p',
     }
 
-    struct Multibase {}
+    pub struct Multibase {}
 }
