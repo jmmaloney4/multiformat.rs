@@ -64,11 +64,16 @@ pub mod multibase {
         if input.is_empty() {
             return Ok(Vec::new());
         }
-        
+
         // Number of n-tets it takes to make an even octet boundary.
         let l = lcm(8, n) / 8;
         // Verify that we are not handling more than one "group" of octets at a time.
-        ensure!(input.len() <= l.into(), "Invalid input size: {} for given n: {}", input.len(), n);
+        ensure!(
+            input.len() <= l.into(),
+            "Invalid input size: {} for given n: {}",
+            input.len(),
+            n
+        );
 
         let mut octets = input;
         octets.resize(l.into(), 0);
@@ -106,7 +111,6 @@ pub mod multibase {
 
             offset %= 8
         }
-        
 
         Ok(output)
     }
@@ -120,8 +124,10 @@ pub mod multibase {
         #[test]
         fn it_works() {
             assert_eq!(2 + 2, 4);
-            assert_eq!(super::octet_group_to_ntets(vec![77, 97, 110], 6).unwrap(), [19, 22, 5, 46]);
+            assert_eq!(
+                super::octet_group_to_ntets(vec![77, 97, 110], 6).unwrap(),
+                [19, 22, 5, 46]
+            );
         }
     }
 }
-
