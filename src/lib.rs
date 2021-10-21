@@ -6,7 +6,6 @@ mod tests {
     }
 }
 
-
 mod multibase {
     #[repr(u8)]
     enum Encoding {
@@ -57,11 +56,8 @@ mod multibase {
         /// "U"
         Base64UrlPad = b'U',
         /// "p"
-        Proquint = b'p'
+        Proquint = b'p',
     }
 
-    struct Multibase {
-
-    }
+    struct Multibase {}
 }
-
