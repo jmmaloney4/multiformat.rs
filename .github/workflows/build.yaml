@@ -13,7 +13,7 @@ jobs:
           - nightly
 
     steps:
-      - uses: actions/checkout@v2.0.0
+      - uses: actions/checkout@v2.3.5
 
       - uses: actions-rs/toolchain@v1.0.7
         with:
