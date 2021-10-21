@@ -13,29 +13,29 @@ jobs:
           - nightly
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v2.0.0
 
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1.0.0
         with:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
           components: rustfmt, clippy
 
-      - uses: actions-rs/cargo@v1
+      - uses: actions-rs/cargo@v1.0.0
         with:
           command: build
 
-      - uses: actions-rs/cargo@v1
+      - uses: actions-rs/cargo@v1.0.0
         with:
           command: test
 
-      - uses: actions-rs/cargo@v1
+      - uses: actions-rs/cargo@v1.0.0
         with:
           command: fmt
           args: --all -- --check
 
-      - uses: actions-rs/cargo@v1
+      - uses: actions-rs/cargo@v1.0.0
         with:
           command: clippy
           args: -- -D warnings
