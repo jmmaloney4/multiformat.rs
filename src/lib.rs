@@ -54,7 +54,7 @@ pub mod multibase {
     pub struct Multibase {}
 
     use anyhow::{ensure, Result};
-    use num::integer::lcm;
+    use num::integer::{div_ceil, lcm};
 
     fn octet_group_to_ntets(input: Vec<u8>, n: u8) -> Result<Vec<u8>> {
         // N-tets can only be 1-7 in size
@@ -75,9 +75,12 @@ pub mod multibase {
             n
         );
 
+        // Number of ntets we will output
+        let out_len = div_ceil(8 * input.len(), n.into());
+
         let mut octets = input;
         octets.resize(l.into(), 0);
-        let mut output: Vec<u8> = Vec::new();
+        let mut output: Vec<u8> = Vec::with_capacity((lcm(8, n) / n).into());
 
         // Offset between the start of an octet and the start of the n-tet
         let mut offset: u8 = n;
@@ -112,6 +115,7 @@ pub mod multibase {
             offset %= 8
         }
 
+        output.truncate(out_len.into());
         Ok(output)
     }
 
@@ -122,12 +126,18 @@ pub mod multibase {
     #[cfg(test)]
     mod tests {
         #[test]
-        fn it_works() {
-            assert_eq!(2 + 2, 4);
+        fn test_octet_group_to_ntets() {
             assert_eq!(
                 super::octet_group_to_ntets(vec![77, 97, 110], 6).unwrap(),
                 [19, 22, 5, 46]
             );
+
+            assert_eq!(
+                super::octet_group_to_ntets(vec![77, 97], 6).unwrap(),
+                [19, 22, 4]
+            );
+
+            assert_eq!(super::octet_group_to_ntets(vec![77], 6).unwrap(), [19, 16]);
         }
     }
 }
