@@ -56,6 +56,27 @@ pub mod multibase {
     use anyhow::{ensure, Result};
     use num::integer::{div_ceil, div_floor, lcm};
 
+    /*
+     *  Base 64:
+     *
+     *      +--first octet--+-second octet--+--third octet--+
+     *      |7 6 5 4 3 2 1 0|7 6 5 4 3 2 1 0|7 6 5 4 3 2 1 0|
+     *      +-----------+---+-------+-------+---+-----------+
+     *      |5 4 3 2 1 0|5 4 3 2 1 0|5 4 3 2 1 0|5 4 3 2 1 0|
+     *      +--1.index--+--2.index--+--3.index--+--4.index--+
+     *
+     *  Base 32:
+     *
+     *      01234567 89012345 67890123 45678901 23456789
+     *      +--------+--------+--------+--------+--------+
+     *      |< 1 >< 2| >< 3 ><|.4 >< 5.|>< 6 ><.|7 >< 8 >|
+     *      +--------+--------+--------+--------+--------+
+     *
+     *  Base 2:
+     *      012345678
+     *
+     */
+
     fn octet_group_to_ntets(input: Vec<u8>, n: u8) -> Result<Vec<u8>> {
         // N-tets can only be 1-7 in size
         ensure!(0 < n && n < 8, "Invalid N: {}", n);
@@ -65,22 +86,28 @@ pub mod multibase {
             return Ok(Vec::new());
         }
 
-        // Number of n-tets it takes to make an even octet boundary.
-        let l = lcm(8, n) / 8;
-        // Verify that we are not handling more than one "group" of octets at a time.
-        ensure!(
-            input.len() <= l.into(),
-            "Invalid input size: {} for given n: {}",
-            input.len(),
-            n
-        );
+        // Octet group size
+        let ogs: u8 = lcm(8, n) / 8;
+        // N-tet group size
+        let ngs: u8 = lcm(8, n) / n;
 
-        // Number of ntets we will output
-        let out_len = div_ceil(8 * input.len(), n.into());
+        // Number of *full* octet groups in the input
+        let full_groups: usize = div_floor(input.len(), ogs as usize);
+        // Number of octets padded out to a full group.
+        let total_groups: usize = div_ceil(input.len(), ogs as usize);
 
+        // Number of octets in input which are not in a full group.
+        let residual_octets: u8 = input.len() as u8 % ogs;
+        // Number of n-tets needed to fully cover residual octets.
+        let residual_ntets: u8 = div_ceil(residual_octets * 8, n);
+
+        // Number of ntets we will output.
+        let out_len: usize = (full_groups * ngs as usize) + residual_ntets as usize;
+
+        // Pad input out to a full octet group.
         let mut octets = input;
-        octets.resize(l.into(), 0);
-        let mut output: Vec<u8> = Vec::with_capacity((lcm(8, n) / n).into());
+        octets.resize(total_groups * ogs as usize, 0);
+        let mut output: Vec<u8> = Vec::with_capacity(total_groups * ngs as usize);
 
         // Offset between the start of an octet and the start of the n-tet
         let mut offset: u8 = n;
@@ -95,6 +122,7 @@ pub mod multibase {
         loop {
             let q = octet / pow2(8 - offset);
             let r = octet % pow2(8 - offset);
+            println!("{} {} {} {} {}", offset, carry, octet, q, r);
 
             output.push(carry * pow2(offset) + q);
             offset += n;
@@ -118,7 +146,7 @@ pub mod multibase {
         output.truncate(out_len.into());
         Ok(output)
     }
-
+    /*
     fn ntet_group_to_octets(input: Vec<u8>, n: u8) -> Result<Vec<u8>> {
         // N-tets can only be 1-7 in size
         ensure!(0 < n && n < 8, "Invalid N: {}", n);
@@ -128,16 +156,10 @@ pub mod multibase {
             return Ok(Vec::new());
         }
 
-        // Number of n-tets it takes to make an even octet boundary.
-        let m = lcm(8, n) / n;
-
-        // Verify that we are not handling more than one "group" of n-tets at a time.
-        ensure!(
-            input.len() <= m.into(),
-            "Invalid input size: {} for given n: {}",
-            input.len(),
-            n
-        );
+        // Octet group size
+        let ogs = lcm(8, n) / 8;
+        // N-tet group size
+        let ngs = lcm(8, n) / n;
 
         let out_len = div_floor(input.len() * n as usize, 8);
 
@@ -177,37 +199,47 @@ pub mod multibase {
 
             offset = offset % 8
         }
-        
+
         let x = output.split_off(out_len);
         println!("{:#?}", x);
 
-        ensure!(r == 0 && x.iter().all(|i| -> bool { *i == 0 as u8 }), "Not Canonical N-Tet");
+        ensure!(
+            r == 0 && x.iter().all(|i| -> bool { *i == 0 as u8 }),
+            "Not Canonical N-Tet"
+        );
 
         // Already appropriately truncated by .split_off above
         Ok(output)
     }
+    */
 
     fn pow2(i: u8) -> u8 {
-        2_u8.pow(i.into())
+        2_u8.pow((i % 8).into())
     }
 
     #[cfg(test)]
     mod tests {
         #[test]
         fn test_octet_group_to_ntets() {
-            assert_eq!(
-                super::octet_group_to_ntets(vec![77, 97, 110], 6).unwrap(),
-                [19, 22, 5, 46]
-            );
+            // assert_eq!(
+            //     super::octet_group_to_ntets(vec![77, 97, 110], 6).unwrap(),
+            //     [19, 22, 5, 46]
+            // );
+
+            // assert_eq!(
+            //     super::octet_group_to_ntets(vec![77, 97], 6).unwrap(),
+            //     [19, 22, 4]
+            // );
+
+            // assert_eq!(super::octet_group_to_ntets(vec![77], 6).unwrap(), [19, 16]);
 
             assert_eq!(
-                super::octet_group_to_ntets(vec![77, 97], 6).unwrap(),
-                [19, 22, 4]
+                super::octet_group_to_ntets(vec![102, 111, 111, 98, 97, 114], 6).unwrap(),
+                // Zm9vYmFy 
+                [25, 38, 61, 47, 24, 38, 5, 50]
             );
-
-            assert_eq!(super::octet_group_to_ntets(vec![77], 6).unwrap(), [19, 16]);
         }
-
+        /*
         #[test]
         fn test_ntet_group_to_octets() {
             assert_eq!(
@@ -222,5 +254,6 @@ pub mod multibase {
 
             assert_eq!(super::ntet_group_to_octets(vec![19, 16], 6).unwrap(), [77]);
         }
+        */
     }
 }
