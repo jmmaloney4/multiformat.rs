@@ -81,6 +81,8 @@ pub mod multibase {
         // N-tets can only be 1-7 in size
         ensure!(0 < n && n < 8, "Invalid N: {}", n);
 
+        println!("{:?}", input);
+
         // Handle trivial case
         if input.is_empty() {
             return Ok(Vec::new());
@@ -120,30 +122,52 @@ pub mod multibase {
         let mut carry: u8 = 0;
 
         loop {
-            let q = octet / pow2(8 - offset);
-            let r = octet % pow2(8 - offset);
+            let q = octet / pow2((8 - offset) % 8);
+            let r = octet % pow2((8 - offset) % 8);
             println!("{} {} {} {} {}", offset, carry, octet, q, r);
 
             output.push(carry * pow2(offset) + q);
             offset += n;
+
             if offset < 8 {
+                // Have not crossed an octet boundary, keep parsing this octet.
                 octet = r;
                 carry = 0;
             } else {
+                // Have reached or crossed an octet boundary.
                 octets_i += 1;
                 if octets_i < octets.len() {
-                    carry = r;
+                    // There are more octets to parse. Fetch the next one, but preserve
+                    // the remainder (the lower half) of the current octet, because
+                    // it will be the upper segment of the next n-tet.
                     octet = octets[octets_i];
+
+                    if offset == 8 {
+                        // Reached the end of a group, exactly at an octet boundary.
+                        // The remainder carries an entire n-tet, so just put in in the output.
+                        output.push(r);
+                        carry = 0;
+                        // Bump the offset over, because we have handeled this last n-tet.
+                        offset += n;
+                    } else {
+                        // Otherwise the remainder is the upper part of the next n-tet, so we
+                        // need to roll it over.
+                        carry = r;
+                    }
                 } else {
-                    output.push(r);
+                    // There are no more octets. The last n-tet is just the remainder
+                    // of the current octet, but shifted up to the left most significant
+                    // side of the n-tet.
+                    output.push(r * pow2(offset % 8));
                     break;
                 }
             }
 
-            offset %= 8
+            offset %= 8;
+            println!("{:?} {} {}", output, octet, carry);
         }
 
-        output.truncate(out_len.into());
+        output.truncate(out_len);
         Ok(output)
     }
     /*
@@ -214,7 +238,8 @@ pub mod multibase {
     */
 
     fn pow2(i: u8) -> u8 {
-        2_u8.pow((i % 8).into())
+        assert!(i < 8);
+        2_u8.pow(i.into())
     }
 
     #[cfg(test)]
@@ -235,7 +260,7 @@ pub mod multibase {
 
             assert_eq!(
                 super::octet_group_to_ntets(vec![102, 111, 111, 98, 97, 114], 6).unwrap(),
-                // Zm9vYmFy 
+                // Zm9vYmFy
                 [25, 38, 61, 47, 24, 38, 5, 50]
             );
         }
