@@ -143,7 +143,7 @@ mod rfc4648 {
         let mut ntets = input;
         ntets.resize(total_groups * ngs as usize, 0);
 
-        let mut output = vec![0; (lcm(8, n) / 8).into()];
+        let mut output = vec![0; total_groups * ogs as usize];
         // Index into output
         let mut j: usize = 0;
 
@@ -176,12 +176,9 @@ mod rfc4648 {
 
             offset = offset % 8
         }
-
-        let x = output.split_off(out_len);
-        println!("{:#?}", x);
-
+        
         ensure!(
-            r == 0 && x.iter().all(|i| -> bool { *i == 0 as u8 }),
+            r == 0 && output.split_off(out_len).iter().all(|i| -> bool { *i == 0 as u8 }),
             "Not Canonical N-Tet"
         );
 
@@ -197,52 +194,47 @@ mod rfc4648 {
     #[cfg(test)]
     mod tests {
         use super::*;
-        
-        #[test]
-        fn test_octet_group_to_ntets() {
-            assert_eq!(
-                octet_group_to_ntets(vec![77, 97, 110], 6).unwrap(),
-                [19, 22, 5, 46]
-            );
-
-            assert_eq!(
-                octet_group_to_ntets(vec![77, 97], 6).unwrap(),
-                [19, 22, 4]
-            );
-
-            assert_eq!(octet_group_to_ntets(vec![77], 6).unwrap(), [19, 16]);
-
-            assert_eq!(
-                octet_group_to_ntets(vec![102, 111, 111, 98, 97, 114], 6).unwrap(),
-                // Zm9vYmFy
-                [25, 38, 61, 47, 24, 38, 5, 50]
-            );
-
-            assert_eq!(
-                octet_group_to_ntets(vec![102, 111, 111], 5).unwrap(),
-                [12, 25, 23, 22, 30]
-            );
-            assert_eq!(octet_group_to_ntets(vec![102], 4).unwrap(), [6, 6]);
-            assert_eq!(octet_group_to_ntets(vec![23], 3).unwrap(), [0, 5, 6]);
-            assert_eq!(
-                octet_group_to_ntets(vec![201, 111, 111], 1).unwrap(),
-                [1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1]
-            );
-        }
+        use std::array::IntoIter;
+        use std::collections::HashMap;
+        use std::iter::FromIterator;
 
         #[test]
-        fn test_ntet_group_to_octets() {
-            assert_eq!(
-                ntet_group_to_octets(vec![19, 22, 5, 46], 6).unwrap(),
-                [77, 97, 110]
-            );
+        fn test_octet_ntet_conversion() {
+            let cases_6 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
+                (vec![77, 97, 110], vec![19, 22, 5, 46]),
+                (vec![77, 97], vec![19, 22, 4]),
+                (vec![77], vec![19, 16]),
+                (vec![102, 111, 111, 98, 97, 114], vec![25, 38, 61, 47, 24, 38, 5, 50]),
+            ]));
 
-            assert_eq!(
-                ntet_group_to_octets(vec![19, 22, 4], 6).unwrap(),
-                [77, 97]
-            );
+            let cases_5 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
+                (vec![102, 111, 111], vec![12, 25, 23, 22, 30]),
+            ]));
 
-            assert_eq!(ntet_group_to_octets(vec![19, 16], 6).unwrap(), [77]);
+            let cases_4 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
+                (vec![102], vec![6, 6]),
+            ]));
+
+            let cases_3 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
+                (vec![23], vec![0, 5, 6]),
+            ]));
+
+            let cases_1 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
+                (vec![201, 111, 111], vec![1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1])
+            ]));
+
+            let test_n = |cases: HashMap::<Vec<u8>, Vec<u8>>, n: u8| {
+                for (i, o) in cases {
+                    assert_eq!(octet_group_to_ntets(i.clone(), n).unwrap(), o);
+                    assert_eq!(ntet_group_to_octets(o, n).unwrap(), i);
+                }
+            };
+
+            test_n(cases_6, 6);
+            test_n(cases_5, 5);
+            test_n(cases_4, 4);
+            test_n(cases_3, 3);
+            test_n(cases_1, 1);
         }
     }
 }
