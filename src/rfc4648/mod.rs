@@ -2,6 +2,52 @@ mod rfc4648 {
 
     use anyhow::{ensure, Result};
     use num::integer::{div_ceil, div_floor, lcm};
+
+    enum Encoding {
+        Binary,
+        Octal,
+        Base16,
+        Base16Upper,
+        Base32,
+        Base32Hex,
+        Base32Upper,
+        Base32HexUpper,
+        Base64,
+        Base64Url,
+    }
+
+    impl Encoding {
+        fn alphabet(&self) -> Vec<char> {
+            match self {
+                Encoding::Binary => "01",
+                Encoding::Octal => "01234567",
+                Encoding::Base16 => "0123456789abcdef",
+                Encoding::Base16Upper => "0123456789ABCDEF",
+                Encoding::Base32 => "abcdefghijklmnopqrstuvwxyz234567",
+                Encoding::Base32Hex => "0123456789abcdefghijklmnopqrstuv",
+                Encoding::Base32Upper => "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
+                Encoding::Base32HexUpper => "0123456789ABCDEFGHIJKLMNOPQRSTUV",
+                Encoding::Base64 => {
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+                }
+                Encoding::Base64Url => {
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+                }
+            }
+            .chars()
+            .collect()
+        }
+
+        fn bits_per_char(&self) -> f64 {
+            (self.alphabet().len() as f64).log2()
+        }
+    }
+
+    trait AlphabetCodable {
+        fn to_alphabet_str(&self) -> String;
+        fn from_alphabet_str(s: String) -> Self;
+    }
+
     /*
      *  Base 64:
      *
@@ -23,7 +69,7 @@ mod rfc4648 {
      *
      */
 
-    fn octet_group_to_ntets(input: Vec<u8>, n: u8) -> Result<Vec<u8>> {
+    fn octet_group_to_ntets(input: &Vec<u8>, n: u8) -> Result<Vec<u8>> {
         // N-tets can only be 1-7 in size
         ensure!(0 < n && n < 8, "Invalid N: {}", n);
 
@@ -50,18 +96,18 @@ mod rfc4648 {
         // Number of ntets we will output.
         let out_len: usize = (full_groups * ngs as usize) + residual_ntets as usize;
 
-        // Pad input out to a full octet group.
-        let mut octets = input;
-        octets.resize(total_groups * ogs as usize, 0);
+        // Vector to store the output
         let mut output: Vec<u8> = Vec::with_capacity(total_groups * ngs as usize);
+
+        // Pad input out to a full octet group.
+        let input_pad = vec![&0_u8; total_groups * ogs as usize - input.len()];
+        let mut iter = input.iter().chain(input_pad.into_iter());
 
         // Offset between the start of an octet and the start of the n-tet
         let mut offset: u8 = n;
-        // Which octet we are currently translating
-        let mut octets_i: usize = 0;
 
-        // Initialize variables used during loop
-        let mut octet: u8 = octets[octets_i];
+        // We already checked that the input is not empty.
+        let mut octet: u8 = *iter.next().unwrap();
         // Residual from the last octet that belongs in the next n-tet
         let mut carry: u8 = 0;
 
@@ -77,32 +123,33 @@ mod rfc4648 {
                 octet = r;
                 carry = 0;
             } else {
-                // Have reached or crossed an octet boundary.
-                octets_i += 1;
-                if octets_i < octets.len() {
-                    // There are more octets to parse. Fetch the next one, but preserve
-                    // the remainder (the lower half) of the current octet, because
-                    // it will be the upper segment of the next n-tet.
-                    octet = octets[octets_i];
-
-                    if offset == 8 {
-                        // Reached the end of a group, exactly at an octet boundary.
-                        // The remainder carries an entire n-tet, so just put in in the output.
-                        output.push(r);
-                        carry = 0;
-                        // Bump the offset over, because we have handeled this last n-tet.
-                        offset += n;
-                    } else {
-                        // Otherwise the remainder is the upper part of the next n-tet, so we
-                        // need to roll it over.
-                        carry = r;
+                // Have reached or crossed an octet boundary. Try to fetch the next octet.
+                match iter.next() {
+                    Some(next) => {
+                        // There is another octet. Preserve
+                        // the remainder (the lower half) of the current octet, because
+                        // it will be the upper segment of the next n-tet.
+                        octet = *next;
+                        if offset == 8 {
+                            // Reached the end of a group, exactly at an octet boundary.
+                            // The remainder carries an entire n-tet, so just put in in the output.
+                            output.push(r);
+                            carry = 0;
+                            // Bump the offset over, because we have handeled this last n-tet.
+                            offset += n;
+                        } else {
+                            // Otherwise the remainder is the upper part of the next n-tet, so we
+                            // need to roll it over.
+                            carry = r;
+                        }
                     }
-                } else {
-                    // There are no more octets. The last n-tet is just the remainder
-                    // of the current octet, but shifted up to the left most significant
-                    // side of the n-tet.
-                    output.push(r * pow2(offset % 8));
-                    break;
+                    None => {
+                        // There are no more octets. The last n-tet is just the remainder
+                        // of the current octet, but shifted up to the left most significant
+                        // side of the n-tet.
+                        output.push(r * pow2(offset % 8));
+                        break;
+                    }
                 }
             }
 
@@ -113,7 +160,7 @@ mod rfc4648 {
         Ok(output)
     }
 
-    fn ntet_group_to_octets(input: Vec<u8>, n: u8) -> Result<Vec<u8>> {
+    fn ntet_group_to_octets(input: &Vec<u8>, n: u8) -> Result<Vec<u8>> {
         // N-tets can only be 1-7 in size
         ensure!(0 < n && n < 8, "Invalid N: {}", n);
 
@@ -140,9 +187,6 @@ mod rfc4648 {
         // Number of octets we will output.
         let out_len: usize = (full_groups * ogs as usize) + residual_octets as usize;
 
-        let mut ntets = input;
-        ntets.resize(total_groups * ngs as usize, 0);
-
         let mut output = vec![0; total_groups * ogs as usize];
         // Index into output
         let mut j: usize = 0;
@@ -151,8 +195,9 @@ mod rfc4648 {
         let mut q: u8;
         let mut r: u8 = 0;
 
-        for i in ntets.into_iter() {
-            ensure!(i < pow2(n), "Invalid {}-tet: {}", n, i);
+        let input_pad = vec![&0_u8; total_groups * ngs as usize - input.len()];
+        for i in input.iter().chain(input_pad.into_iter()) {
+            ensure!(*i < pow2(n), "Invalid {}-tet: {}", n, i);
 
             // Handle carry. Take the least significant part of the n-tet (r) and
             // move it to the most significant part of the next output byte.
@@ -176,10 +221,14 @@ mod rfc4648 {
 
             offset = offset % 8
         }
-        
+
         ensure!(
-            r == 0 && output.split_off(out_len).iter().all(|i| -> bool { *i == 0 as u8 }),
-            "Not Canonical N-Tet"
+            r == 0
+                && output
+                    .split_off(out_len)
+                    .iter()
+                    .all(|i| -> bool { *i == 0 as u8 }),
+            "Non-canonical N-tet"
         );
 
         // Already appropriately truncated by .split_off above
@@ -201,32 +250,38 @@ mod rfc4648 {
         #[test]
         fn test_octet_ntet_conversion() {
             let cases_6 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
+                (vec![], vec![]),
                 (vec![77, 97, 110], vec![19, 22, 5, 46]),
                 (vec![77, 97], vec![19, 22, 4]),
                 (vec![77], vec![19, 16]),
-                (vec![102, 111, 111, 98, 97, 114], vec![25, 38, 61, 47, 24, 38, 5, 50]),
+                (
+                    vec![102, 111, 111, 98, 97, 114],
+                    vec![25, 38, 61, 47, 24, 38, 5, 50],
+                ),
             ]));
 
-            let cases_5 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
-                (vec![102, 111, 111], vec![12, 25, 23, 22, 30]),
-            ]));
+            let cases_5 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([(
+                vec![102, 111, 111],
+                vec![12, 25, 23, 22, 30],
+            )]));
 
-            let cases_4 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
-                (vec![102], vec![6, 6]),
-            ]));
+            let cases_4 =
+                HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([(vec![102], vec![6, 6])]));
 
-            let cases_3 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
-                (vec![23], vec![0, 5, 6]),
-            ]));
+            let cases_3 =
+                HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([(vec![23], vec![0, 5, 6])]));
 
-            let cases_1 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([
-                (vec![201, 111, 111], vec![1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1])
-            ]));
+            let cases_1 = HashMap::<Vec<u8>, Vec<u8>>::from_iter(IntoIter::new([(
+                vec![201, 111, 111],
+                vec![
+                    1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1,
+                ],
+            )]));
 
-            let test_n = |cases: HashMap::<Vec<u8>, Vec<u8>>, n: u8| {
+            let test_n = |cases: HashMap<Vec<u8>, Vec<u8>>, n: u8| {
                 for (i, o) in cases {
-                    assert_eq!(octet_group_to_ntets(i.clone(), n).unwrap(), o);
-                    assert_eq!(ntet_group_to_octets(o, n).unwrap(), i);
+                    assert_eq!(octet_group_to_ntets(&i, n).unwrap(), o);
+                    assert_eq!(ntet_group_to_octets(&o, n).unwrap(), i);
                 }
             };
 
