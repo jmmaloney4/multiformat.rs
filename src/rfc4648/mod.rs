@@ -3,7 +3,8 @@ mod rfc4648 {
     use anyhow::{ensure, Result};
     use num::integer::{div_ceil, div_floor, lcm};
 
-    enum Encoding {
+    #[derive(Debug)]
+    enum Alphabet {
         Binary,
         Octal,
         Base16,
@@ -16,21 +17,23 @@ mod rfc4648 {
         Base64Url,
     }
 
-    impl Encoding {
+    impl Alphabet {
+        const PADDING_CHAR: char = '=';
+
         fn alphabet(&self) -> Vec<char> {
             match self {
-                Encoding::Binary => "01",
-                Encoding::Octal => "01234567",
-                Encoding::Base16 => "0123456789abcdef",
-                Encoding::Base16Upper => "0123456789ABCDEF",
-                Encoding::Base32 => "abcdefghijklmnopqrstuvwxyz234567",
-                Encoding::Base32Hex => "0123456789abcdefghijklmnopqrstuv",
-                Encoding::Base32Upper => "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
-                Encoding::Base32HexUpper => "0123456789ABCDEFGHIJKLMNOPQRSTUV",
-                Encoding::Base64 => {
+                Alphabet::Binary => "01",
+                Alphabet::Octal => "01234567",
+                Alphabet::Base16 => "0123456789abcdef",
+                Alphabet::Base16Upper => "0123456789ABCDEF",
+                Alphabet::Base32 => "abcdefghijklmnopqrstuvwxyz234567",
+                Alphabet::Base32Hex => "0123456789abcdefghijklmnopqrstuv",
+                Alphabet::Base32Upper => "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
+                Alphabet::Base32HexUpper => "0123456789ABCDEFGHIJKLMNOPQRSTUV",
+                Alphabet::Base64 => {
                     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
                 }
-                Encoding::Base64Url => {
+                Alphabet::Base64Url => {
                     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
                 }
             }
@@ -38,14 +41,47 @@ mod rfc4648 {
             .collect()
         }
 
+        fn len(&self) -> usize {
+            self.alphabet().len()
+        }
+
         fn bits_per_char(&self) -> f64 {
-            (self.alphabet().len() as f64).log2()
+            (self.len() as f64).log2()
         }
     }
 
     trait AlphabetCodable {
-        fn to_alphabet_str(&self) -> String;
-        fn from_alphabet_str(s: String) -> Self;
+        fn to_alphabet_str(&self, alphabet: Alphabet) -> String;
+        fn from_alphabet_str(s: String, alphabet: Alphabet) -> Self;
+    }
+
+    impl AlphabetCodable for Vec<u8> {
+        fn to_alphabet_str(&self, alphabet: Alphabet) -> String {
+            self.iter()
+                .map(|k| -> char {
+                    assert!(
+                        *k < alphabet.len() as u8,
+                        "No corresponding alphabet character for {}",
+                        k
+                    );
+                    alphabet.alphabet()[*k as usize]
+                })
+                .collect::<String>()
+        }
+
+        fn from_alphabet_str(s: String, alphabet: Alphabet) -> Self {
+            s.chars()
+                .filter(|c| -> bool { *c != Alphabet::PADDING_CHAR })
+                .map(|c| -> u8 {
+                    match alphabet.alphabet().iter().position(|a| -> bool { *a == c }) {
+                        Some(rv) => rv as u8,
+                        None => {
+                            panic!("{} not present in alphabet {:?}", c, alphabet);
+                        }
+                    }
+                })
+                .collect()
+        }
     }
 
     /*
