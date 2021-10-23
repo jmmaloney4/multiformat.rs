@@ -1,7 +1,7 @@
-use anyhow::{ensure, Result};
-use num::integer::{div_ceil, div_floor, lcm};
-
 mod rfc4648 {
+
+    use anyhow::{ensure, Result};
+    use num::integer::{div_ceil, div_floor, lcm};
     /*
      *  Base 64:
      *
@@ -26,8 +26,6 @@ mod rfc4648 {
     fn octet_group_to_ntets(input: Vec<u8>, n: u8) -> Result<Vec<u8>> {
         // N-tets can only be 1-7 in size
         ensure!(0 < n && n < 8, "Invalid N: {}", n);
-
-        println!("{:?}", input);
 
         // Handle trivial case
         if input.is_empty() {
@@ -70,7 +68,6 @@ mod rfc4648 {
         loop {
             let q = octet / pow2((8 - offset) % 8);
             let r = octet % pow2((8 - offset) % 8);
-            println!("{} {} {} {} {}", offset, carry, octet, q, r);
 
             output.push(carry * pow2(offset) + q);
             offset += n;
@@ -110,10 +107,85 @@ mod rfc4648 {
             }
 
             offset %= 8;
-            println!("{:?} {} {}", output, octet, carry);
         }
 
         output.truncate(out_len);
+        Ok(output)
+    }
+
+    fn ntet_group_to_octets(input: Vec<u8>, n: u8) -> Result<Vec<u8>> {
+        // N-tets can only be 1-7 in size
+        ensure!(0 < n && n < 8, "Invalid N: {}", n);
+
+        // Handle trivial case
+        if input.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Octet group size
+        let ogs: u8 = lcm(8, n) / 8;
+        // N-tet group size
+        let ngs: u8 = lcm(8, n) / n;
+
+        // Number of *full* n-tet groups in the input
+        let full_groups: usize = div_floor(input.len(), ngs as usize);
+        // Number of n-tets padded out to a full group.
+        let total_groups: usize = div_ceil(input.len(), ngs as usize);
+
+        // Number of n-tets in input which are not in a full group.
+        let residual_ntets: u8 = input.len() as u8 % ngs;
+        // Number of octets fully covered by residual n-tets.
+        let residual_octets: u8 = div_floor(residual_ntets * n, 8);
+
+        // Number of octets we will output.
+        let out_len: usize = (full_groups * ogs as usize) + residual_octets as usize;
+
+        let mut ntets = input;
+        ntets.resize(total_groups * ngs as usize, 0);
+
+        let mut output = vec![0; (lcm(8, n) / 8).into()];
+        // Index into output
+        let mut j: usize = 0;
+
+        let mut offset: u8 = 0;
+        let mut q: u8;
+        let mut r: u8 = 0;
+
+        for i in ntets.into_iter() {
+            ensure!(i < pow2(n), "Invalid {}-tet: {}", n, i);
+
+            // Handle carry. Take the least significant part of the n-tet (r) and
+            // move it to the most significant part of the next output byte.
+            if r != 0 {
+                output[j] += r * pow2(8 - offset);
+            }
+            // We have handled the remainder now.
+            r = 0;
+
+            offset += n;
+            if offset < 8 {
+                // We have not crossed a byte boundary, so the entire input n-tet is in the current output byte.
+                output[j] += i * pow2(8 - offset);
+            } else {
+                // We have crossed a byte boundary, we need to split the most and least significant halves of the input n-tet
+                q = i / pow2(offset - 8);
+                r = i % pow2(offset - 8);
+                output[j] += q;
+                j += 1;
+            }
+
+            offset = offset % 8
+        }
+
+        let x = output.split_off(out_len);
+        println!("{:#?}", x);
+
+        ensure!(
+            r == 0 && x.iter().all(|i| -> bool { *i == 0 as u8 }),
+            "Not Canonical N-Tet"
+        );
+
+        // Already appropriately truncated by .split_off above
         Ok(output)
     }
 
@@ -124,25 +196,53 @@ mod rfc4648 {
 
     #[cfg(test)]
     mod tests {
+        use super::*;
+        
         #[test]
         fn test_octet_group_to_ntets() {
             assert_eq!(
-                super::octet_group_to_ntets(vec![77, 97, 110], 6).unwrap(),
+                octet_group_to_ntets(vec![77, 97, 110], 6).unwrap(),
                 [19, 22, 5, 46]
             );
 
             assert_eq!(
-                super::octet_group_to_ntets(vec![77, 97], 6).unwrap(),
+                octet_group_to_ntets(vec![77, 97], 6).unwrap(),
                 [19, 22, 4]
             );
 
-            assert_eq!(super::octet_group_to_ntets(vec![77], 6).unwrap(), [19, 16]);
+            assert_eq!(octet_group_to_ntets(vec![77], 6).unwrap(), [19, 16]);
 
             assert_eq!(
-                super::octet_group_to_ntets(vec![102, 111, 111, 98, 97, 114], 6).unwrap(),
+                octet_group_to_ntets(vec![102, 111, 111, 98, 97, 114], 6).unwrap(),
                 // Zm9vYmFy
                 [25, 38, 61, 47, 24, 38, 5, 50]
             );
+
+            assert_eq!(
+                octet_group_to_ntets(vec![102, 111, 111], 5).unwrap(),
+                [12, 25, 23, 22, 30]
+            );
+            assert_eq!(octet_group_to_ntets(vec![102], 4).unwrap(), [6, 6]);
+            assert_eq!(octet_group_to_ntets(vec![23], 3).unwrap(), [0, 5, 6]);
+            assert_eq!(
+                octet_group_to_ntets(vec![201, 111, 111], 1).unwrap(),
+                [1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1]
+            );
+        }
+
+        #[test]
+        fn test_ntet_group_to_octets() {
+            assert_eq!(
+                ntet_group_to_octets(vec![19, 22, 5, 46], 6).unwrap(),
+                [77, 97, 110]
+            );
+
+            assert_eq!(
+                ntet_group_to_octets(vec![19, 22, 4], 6).unwrap(),
+                [77, 97]
+            );
+
+            assert_eq!(ntet_group_to_octets(vec![19, 16], 6).unwrap(), [77]);
         }
     }
 }
