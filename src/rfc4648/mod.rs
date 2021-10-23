@@ -282,6 +282,7 @@ mod rfc4648 {
         use std::array::IntoIter;
         use std::collections::HashMap;
         use std::iter::FromIterator;
+        use rand::Rng;
 
         #[test]
         fn test_octet_ntet_conversion() {
@@ -326,6 +327,18 @@ mod rfc4648 {
             test_n(cases_4, 4);
             test_n(cases_3, 3);
             test_n(cases_1, 1);
+        }
+
+        #[test]
+        fn test_random_data() {
+            let random_bytes: Vec<u8> = (0..1024).map(|_| { rand::random::<u8>() }).collect();
+            (1..=7).map(|n| {
+                (n, octet_group_to_ntets(&random_bytes, n).unwrap())
+            }).map(|(n, ntets)| {
+                (n, ntet_group_to_octets(&ntets, n).unwrap())
+            }).for_each(|(n, octets)| {
+                assert_eq!(random_bytes, octets, "Equality failed for n={}", n);
+            })
         }
     }
 }
