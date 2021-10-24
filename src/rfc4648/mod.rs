@@ -342,15 +342,21 @@ mod rfc4648 {
 
         #[test]
         fn test_random_data() {
-            let random_bytes: Vec<u8> = (0..1024).map(|_| { rand::random::<u8>() }).collect();
-            (1_u8..=7).map(|n| {
-                (n, octet_group_to_ntets(&random_bytes, n).unwrap())
-            }).map(|(n, ntets)| {
-                println!("{}", ntets.len());
-                (n, ntet_group_to_octets(&ntets, n).unwrap())
-            }).for_each(|(n, octets)| {
-                assert_eq!(random_bytes, octets, "Equality failed for n={}", n);
-            })
+            const RANDOM_TRIALS: usize = 10;
+            
+            for _ in 0..RANDOM_TRIALS {
+                let rand_count = rand::random::<u16>();
+                let random_bytes: Vec<u8> = (0..rand_count).map(|_| { rand::random::<u8>() }).collect();
+
+                (1_u8..=7).map(|n| {
+                    (n, octet_group_to_ntets(&random_bytes, n).unwrap())
+                }).map(|(n, ntets)| {
+                    println!("{}", ntets.len());
+                    (n, ntet_group_to_octets(&ntets, n).unwrap())
+                }).for_each(|(n, octets)| {
+                    assert_eq!(random_bytes, octets, "Equality failed for n={}", n);
+                })
+            }
         }
     }
 }
