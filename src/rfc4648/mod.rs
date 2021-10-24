@@ -125,7 +125,7 @@ mod rfc4648 {
         let total_groups: usize = div_ceil(input.len(), ogs as usize);
 
         // Number of octets in input which are not in a full group.
-        let residual_octets: u8 = input.len() as u8 % ogs;
+        let residual_octets: u8 = (input.len() % ogs as usize) as u8;
         // Number of n-tets needed to fully cover residual octets.
         let residual_ntets: u8 = div_ceil(residual_octets * 8, n);
 
@@ -292,8 +292,19 @@ mod rfc4648 {
                 (vec![77, 97], vec![19, 22, 4]),
                 (vec![77], vec![19, 16]),
                 (
+                    // foobar
                     vec![102, 111, 111, 98, 97, 114],
                     vec![25, 38, 61, 47, 24, 38, 5, 50],
+                ),
+                (
+                    // fooba
+                    vec![102, 111, 111, 98, 97],
+                    vec![25, 38, 61, 47, 24, 38, 4],
+                ),
+                (
+                    // foob
+                    vec![102, 111, 111, 98],
+                    vec![25, 38, 61, 47, 24, 32],
                 ),
             ]));
 
@@ -332,9 +343,10 @@ mod rfc4648 {
         #[test]
         fn test_random_data() {
             let random_bytes: Vec<u8> = (0..1024).map(|_| { rand::random::<u8>() }).collect();
-            (1..=7).map(|n| {
+            (1_u8..=7).map(|n| {
                 (n, octet_group_to_ntets(&random_bytes, n).unwrap())
             }).map(|(n, ntets)| {
+                println!("{}", ntets.len());
                 (n, ntet_group_to_octets(&ntets, n).unwrap())
             }).for_each(|(n, octets)| {
                 assert_eq!(random_bytes, octets, "Equality failed for n={}", n);
