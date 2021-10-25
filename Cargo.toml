@@ -10,3 +10,5 @@ authors = ["Jack Maloney <git@jmmaloney4.xyz>"]
 anyhow = "1.0.44"
 num = "0.4.0"
 rand = "0.8.4"
+deku = "0.12.4"
+bitvec = "*"
