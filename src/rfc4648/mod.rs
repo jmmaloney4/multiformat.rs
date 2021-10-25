@@ -1,4 +1,4 @@
-use anyhow::{ensure, Result};
+use anyhow::{bail, ensure, Result};
 use num::integer::{div_ceil, div_floor, lcm};
 
 #[cfg(test)]
@@ -18,9 +18,9 @@ enum Alphabet {
     Base64Url,
 }
 
-impl Alphabet {
-    const PADDING_CHAR: char = '=';
+const PADDING_CHAR: char = '=';
 
+impl Alphabet {
     fn alphabet(&self) -> Vec<char> {
         match self {
             Alphabet::Binary => "01",
@@ -49,37 +49,50 @@ impl Alphabet {
     }
 }
 
-trait AlphabetCodable {
-    fn to_alphabet_str(&self, alphabet: Alphabet) -> String;
-    fn from_alphabet_str(s: String, alphabet: Alphabet) -> Self;
+trait AlphabetConvertible: Sized {
+    fn to_alphabet_str(&self, alphabet: Alphabet) -> Result<String>;
+    fn from_alphabet_str(s: String, alphabet: Alphabet) -> Result<Self>;
 }
 
-impl AlphabetCodable for Vec<u8> {
-    fn to_alphabet_str(&self, alphabet: Alphabet) -> String {
+impl AlphabetConvertible for Vec<u8> {
+    fn to_alphabet_str(&self, alphabet: Alphabet) -> Result<String> {
         self.iter()
-            .map(|k| -> char {
-                assert!(
+            .map(|k| -> Result<char> {
+                ensure!(
                     *k < alphabet.len() as u8,
                     "No corresponding alphabet character for {}",
                     k
                 );
-                alphabet.alphabet()[*k as usize]
+                Ok(alphabet.alphabet()[*k as usize])
             })
-            .collect::<String>()
+            .collect::<Result<String>>()
     }
 
-    fn from_alphabet_str(s: String, alphabet: Alphabet) -> Self {
+    fn from_alphabet_str(s: String, alphabet: Alphabet) -> Result<Self> {
         s.chars()
-            .filter(|c| -> bool { *c != Alphabet::PADDING_CHAR })
-            .map(|c| -> u8 {
+            .filter(|c| -> bool { *c != PADDING_CHAR })
+            .map(|c| -> Result<u8> {
                 match alphabet.alphabet().iter().position(|a| -> bool { *a == c }) {
-                    Some(rv) => rv as u8,
+                    Some(rv) => Ok(rv as u8),
                     None => {
-                        panic!("{} not present in alphabet {:?}", c, alphabet);
+                        bail!("{} not present in alphabet {:?}", c, alphabet);
                     }
                 }
             })
             .collect()
+    }
+}
+
+trait AddPaddingChars {
+    fn add_padding_chars(&mut self, gs: u8);
+}
+
+impl AddPaddingChars for String {
+    fn add_padding_chars(&mut self, gs: u8) {
+        let m = self.len() % gs as usize;
+        if m != 0 {
+            *self += String::from(PADDING_CHAR).repeat(gs as usize - m).as_str();
+        }
     }
 }
 
