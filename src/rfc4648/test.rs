@@ -82,3 +82,47 @@ fn test_random_data() {
             })
     }
 }
+
+/*
+use deku::prelude::*;
+
+#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[deku(endian = "big")]
+struct DekuTest {
+    #[deku(bits = "4")]
+    field_a: u8,
+    #[deku(bits = "4")]
+    field_b: u8,
+    field_c: u16,
+}
+
+#[derive(Debug, PartialEq, DekuRead, DekuWrite, SixTet)]
+#[deku(endian = "big")]
+struct SixTet {
+    #[deku(bits = 6)]
+    data: Vec<u8>
+}
+
+*/
+
+use bitvec::prelude::*;
+use itertools::Itertools;
+
+#[test]
+fn asdf() {
+    let data: Vec<u8> = vec![102, 111, 111, 98, 97, 114];
+
+    let n = 6;
+    const NTET: usize = bitvec::mem::elts::<usize>(6);
+
+    data.view_bits::<Msb0>().iter().chunks(n).into_iter().for_each(|chunk| {
+        let a: BitArr!(for 6, in Msb0, u8);
+        let mut b: u8 = 0;
+        for (i, j) in chunk.into_iter().enumerate() {
+            b += *j as u8 * pow2(i as u8);
+        }
+        println!("{}", b);
+    });
+
+    //let s: BitVec<Msb0, u8> = BitVec::from(data);
+}

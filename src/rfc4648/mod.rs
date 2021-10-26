@@ -287,3 +287,4 @@ fn pow2(i: u8) -> u8 {
     assert!(i < 8);
     2_u8.pow(i.into())
 }
+
