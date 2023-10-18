@@ -8,7 +8,7 @@ authors = ["Jack Maloney <git@jmmaloney4.xyz>"]
 
 [dependencies]
 anyhow = "1.0.75"
-num = "0.4.0"
+num = "0.4.1"
 rand = "0.8.4"
 deku = "0.12.5"
 bitvec = "*"
