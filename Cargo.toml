@@ -10,6 +10,6 @@ authors = ["Jack Maloney <git@jmmaloney4.xyz>"]
 anyhow = "1.0.75"
 num = "0.4.1"
 rand = "0.8.5"
-deku = "0.12.5"
+deku = "0.16.0"
 bitvec = "*"
 itertools = "0.10.3"
