@@ -7,7 +7,7 @@ authors = ["Jack Maloney <git@jmmaloney4.xyz>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.76"
+anyhow = "1.0.77"
 num = "0.4.1"
 rand = "0.8.5"
 deku = "0.16.0"
